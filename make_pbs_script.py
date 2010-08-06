@@ -1,9 +1,27 @@
 #!/usr/bin/env python
 
+################################################################################
+#
+# An interative program to help people write PBS scripts. The goal is to help
+# new users write simple PBS scripts. Interaction with the user takes the form 
+# of a question and answer dialog. The code is designed so that you can easily 
+# add new questions, response parsers and actions to take for each response. 
+# It also provides online help for each question asked.
+#
+# Author: Bernie Pope (bjpope@unimelb.edu.au)
+# License: GPL V3: http://www.gnu.org/licenses/gpl.html
+# Version: 0.1
+# Revision history: 
+#
+# Fri 6 Aug 2010, Version 0.1. Untested. Incomplete.
+#
+################################################################################
+
+
 import re
+import os.path
 
-# An interative program to help people write PBS scripts.
-
+machineName = 'bruce.vlsci.unimelb.edu.au'
 defaultScriptName = 'job.pbs'
 defaultCores = 1 
 maxCores = 512
@@ -17,33 +35,44 @@ maxSMPMem = 144 # gigabytes
 maxDistMem = 144 # XXX not sure if this is really sane
 defaultWorkDir = 'y'
 
+# Something wrong with the way the user responded to the question.
 class ResponseError(Exception):
     def __init__(self, value):
         self.value = value
     def __str__(self):
         return str(self.value)
 
+# Something wrong with the action performed on their response.
+class ActionError(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return str(self.value)
+
+# User requested early termination of the dialog.
 class Terminate(Exception):
     def __init__(self, value=None):
         self.value = value
     def __str__(self):
         return 'Terminate'
 
+# Parse time input.
 def hoursMinutesSeconds(input):
     pat = re.match(r"(\d+):(\d{1,2}):(\d{1,2})$", input)
     if pat != None: 
        (hours, mins, secs) = pat.groups()
-       if int(mins) <= 60 and int(secs) <= 60:
+       if int(mins) < 60 and int(secs) < 60:
            return input
     raise ResponseError('''
 The answer to this question must be in the form: hours:minutes:seconds
-hours is a sequence of at least one digit.
-minutes is a sequence of one or two digits <= 60.
-seconds is a sequence of one or two digits <= 60.
+hours is a sequence of at least one digit (it can be just 0).
+minutes is a sequence of one or two digits < 60.
+seconds is a sequence of one or two digits < 60.
 '''
 )
 
-def anyString(input):
+# Accept any non-empty string.
+def nonEmptyString(input):
     if len(input) == 0:
        return None 
     else:
@@ -68,28 +97,50 @@ def integerInRange(input,lo,hi):
 class Script(object):
     def __init__(self):
         self.lines = ['#!/bin/bash\n']
-        self.fileName = None
+        self.outFile = None
         self.isSMP = False
-    def mkJobName(self, name):
+    def mkJobName(self, msg, name):
         if name != None:
+            self.lines.append("# %s\n" % msg)
             self.lines.append("#PBS -N %s\n" % name)
-    def mkFileName(self, name):
-        self.fileName = name
-    def mkSMP(self, isSMP):
+    def mkFileName(self, msg, name):
+        if os.path.exists(name) and not askQuestion(overwriteFile):
+            raise ActionError("Please choose another file name.")
+        try:
+            outFile = open(name, "w")
+            self.outFile = outFile
+        except IOError as e:
+            raise ActionError(str(e))
+    def mkSMP(self, msg, isSMP):
         if isSMP:
             self.isSMP = True
+            self.lines.append("# %s\n" % msg)
             self.lines.append("#PBS -q smp\n")
-    def mkProcs(self, num):
+    def mkProcs(self, msg, num):
+        self.lines.append("# %s\n" % msg)
         self.lines.append("#PBS -l procs=%d\n" % num) 
-    def mkWallTime(self, time):
+    def mkWallTime(self, msg, time):
+        self.lines.append("# %s\n" % msg)
         self.lines.append("#PBS walltime=%s\n" % time)
-    def mkSMPMem(self, amount):
+    def mkSMPMem(self, msg, amount):
+        self.lines.append("# %s\n" % msg)
         self.lines.append("#PBS -l mem=%d\n" % amount)
-    def mkDistMem(self, amount):
+    def mkDistMem(self, msg, amount):
+        self.lines.append("# %s\n" % msg)
         self.lines.append("#PBS -l pvmem=%d\n" % amount)
-    def mkWorkDir(self, wantWorkDir):
+    def mkWorkDir(self, msg, wantWorkDir):
         if wantWorkDir:
+            self.lines.append("# %s\n" % msg)
             self.lines.append("cd $PBS_O_WORKDIR\n")
+    def mkModules(self, msg, input):
+        if input != None:
+            self.lines.append("# %s\n" % msg)
+            self.lines.append("module load %s\n" % input)
+    def mkCommand(self, msg, input):
+        if input != None:
+            self.lines.append("# %s\n" % msg)
+            self.lines.append("%s\n" % input)
+ 
 
 class Question(object):
      def __init__(self, message, parser, default, action, help, askMe):
@@ -105,7 +156,7 @@ script = Script()
 scriptName = Question(
     askMe = lambda: True,
     message = 'What is the file name of the new script? [%s]' % defaultScriptName,
-    parser  = anyString,
+    parser  = nonEmptyString,
     default = defaultScriptName, 
     action = script.mkFileName,
     help = '''
@@ -121,7 +172,7 @@ Some tips for choosing a good name:
 jobName = Question(
     askMe = lambda: True,
     message = 'What is the name of your job? []',
-    parser  = anyString,
+    parser  = nonEmptyString,
     default = '',
     action = script.mkJobName,
     help = '''
@@ -135,9 +186,9 @@ running or have run previously.
  
 isSMP = Question(
     askMe = lambda: True,
-    message = 'Is your job SMP? (y or n) [n]', 
+    message = 'Is your job SMP? (y/n) [n]', 
     parser  = yesNo,
-    default = 'no',
+    default = 'n',
     action = script.mkSMP,
     help = '''
 SMP means "Symmetric multiprocessing". 
@@ -155,11 +206,11 @@ cpuCores = Question(
     action = script.mkProcs,
     help = '''
 A CPU core is one processor.
-Each compute node has %d processor sockets.
+On %s each compute node has %d processor sockets.
 Each processor socket has %d CPU cores.
 Therefore each compute node has %d CPU cores.
 All CPU cores on the same compute node share the RAM memory of the node.
-''' % (socketsPerNode, coresPerSocket, socketsPerNode * coresPerSocket)
+''' % (machineName, socketsPerNode, coresPerSocket, socketsPerNode * coresPerSocket)
 )
 
 wallTime = Question(
@@ -217,34 +268,90 @@ the job is launched (the directory where you enter the qsub command).
 '''
 )
 
-# The order of (some) questions is important.
-# The answer to SMP questions determines the questions asked later.
+overwriteFile = Question(
+    askMe = lambda: True,
+    message = 'That file already exists, do you want to overwrite it? (y/n) [n]',
+    parser  = yesNo,
+    default = 'n',
+    action = lambda msg, answer: answer,
+    help = '''
+The file name you have requested refers to a file that already exists.
+If you answer 'y' (yes) to this question then that file will be overwritten 
+with new data, and the contents of the current version will be lost. If you 
+don't want to overwrite the file then answer 'n' (no) and you will be prompted 
+for a new file name.
+'''
+)
 
-questions = [ scriptName, jobName, wallTime, isSMP, cpuCores, smpMem, distMem, workDir ]
+modules = Question(
+    askMe = lambda: True,
+    message = 'What modules would you like to be loaded for your script? []', 
+    parser  = nonEmptyString,
+    default = '',
+    action = script.mkModules,
+    help = '''
+The answer to this question should be a possibly empty sequence of module names separated
+by whitespace on a single line. For example:
+
+   octave-icc gcc velvet-gcc
+
+Modules provide a convenient way to set up the unix environment for particular programs.
+Many programs on %s have a module file associated with them. The module file must be
+loaded before the program can be run. To find out what modules are available on
+%s, type the command 'module avail' at the unix prompt.
+''' % (machineName, machineName)
+)
+
+command = Question(
+    askMe = lambda: True,
+    message = 'What command do you want your script to run? []',
+    parser  = nonEmptyString,
+    default = '',
+    action = script.mkCommand,
+    help = '''
+Enter the unix command that you want to execute on the compute nodes. For example,
+if you wanted to run a distributed NAMD job on the macpf.conf input file, the
+command would be:
+
+   mpiexec namd2 macpf.conf 
+
+mpiexec is used for launching distributed parallel jobs. SMP jobs do not need
+to be prefixed by mpiexec. 
+
+Note this PBS generation program only allows you to enter a single line command.
+If you want to run a multi-line command you will have to edit the generated
+PBS script by hand.
+'''
+)
+
+
+
+def askQuestion(q):
+    while True:
+        response = raw_input(q.message + ' ').strip()
+        if len(response) == 0:
+           response = q.default
+        elif response.lower() in ['h', 'help']:
+            print "\n%s\n" % q.help
+            continue
+        elif response.lower() in ['q', 'quit']:
+           raise Terminate()
+        try:
+           parseOut = q.parser(response)    
+           return q.action(q.message, parseOut)
+        except (ResponseError, ActionError) as e:
+           print e 
+           continue
 
 def interact():
+    # The order of (some) questions is important.
+    # The answer to SMP questions determines the questions asked later.
+    questions = [ scriptName, jobName, wallTime, isSMP, cpuCores, smpMem, distMem, workDir, modules, command ]
     try:
         for q in questions:
-            if q.askMe():
-                while True:
-                    response = raw_input(q.message + ' ').strip()
-                    if len(response) == 0:
-                        response = q.default
-                    elif response.lower() in ['h', 'help']:
-                        print "\n%s\n" % q.help
-                        continue
-                    elif response.lower() in ['q', 'quit']:
-                        raise Terminate()
-                    try:
-                        parseOut = q.parser(response)    
-                        q.action(parseOut)
-                        break
-                    except ResponseError as e:
-                        print e 
-                        continue
+            if q.askMe(): askQuestion(q)
     except Terminate as e:
         print "Exiting the PBS script generator."
-        
 
 def banner(): print "#" * 80
 
@@ -276,7 +383,7 @@ banner()
 print
 
 interact()
-if script.fileName != None:
-    outFile = open(script.fileName, "w")
-    outFile.writelines(script.lines)
-    outFile.close()
+if script.outFile != None:
+    script.outFile.writelines(script.lines)
+    script.outFile.close()
+    print "Output written to file: %s" % script.outFile.name 
