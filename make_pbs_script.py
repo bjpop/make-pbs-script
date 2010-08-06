@@ -109,7 +109,7 @@ class Script(object):
         try:
             outFile = open(name, "w")
             self.outFile = outFile
-        except IOError as e:
+        except IOError, e:
             raise ActionError(str(e))
     def mkSMP(self, msg, isSMP):
         if isSMP:
@@ -339,7 +339,7 @@ def askQuestion(q):
         try:
            parseOut = q.parser(response)    
            return q.action(q.message, parseOut)
-        except (ResponseError, ActionError) as e:
+        except (ResponseError, ActionError), e:
            print e 
            continue
 
@@ -350,7 +350,7 @@ def interact():
     try:
         for q in questions:
             if q.askMe(): askQuestion(q)
-    except Terminate as e:
+    except Terminate, e:
         print "Exiting the PBS script generator."
 
 def banner(): print "#" * 80
