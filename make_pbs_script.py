@@ -51,12 +51,11 @@ class Action(object):
         self.selector = selector
         self.action = action
         self.modifyState = modifyState
-   
+
     def decide(self, state):
         result = self.action(state)
         self.modifyState(result, state)
         self.selector(result).decide(state)
-
 
 def askQuestion(question, help, default, parser, state):
     while True:
@@ -65,17 +64,17 @@ def askQuestion(question, help, default, parser, state):
             if default == None:
                 continue
             else:
-                response = default 
+                response = default
         elif response.lower() in ['h', 'help']:
             print "\n%s\n" % help
             continue
         elif response.lower() in ['q', 'quit']:
            raise Terminate()
         try:
-           parseOut = parser(response)    
+           parseOut = parser(response)
            return parseOut
         except ResponseError, e:
-           print e 
+           print e
            continue
 
 # Something wrong with the way the user responded to the question.
@@ -125,93 +124,29 @@ def parseIntegerInRange(input,lo,hi):
         val = int(input)
         if lo <= val and val <= hi:
             return val
-    raise ResponseError("The answer to this question must be a number in the range (%d-%d)." % (lo,hi) )
-
+    raise ResponseError("The answer to this question must be a number in the range (%d-%d)." % (lo,hi))
 
 class FileOpen(object):
     def __init__(self, name, file=None, exists=False, error=None):
         self.file = file
         self.exists = exists
-        self.error = error 
+        self.error = error
         self.name = name
 
-def fileExists (name):
-    return Decision(
-    question = 'File %s already exists, do you want to overwrite it? [%s]' % (name, defaultFileOverwrite),
-    modifyState = setScriptName, 
-    selector = overwriteFileSelector,
-    help = '''
-'''
-)
+def overwriteFile():
 
-def askToOverwriteFile():
+    def modify(file, script):
+        script.file = file
 
-    overwriteHelp = '''
-The file name you have requested refers to a file that already exists.
-If you answer 'y' (yes) to this question then that file will be overwritten
-with new data, and the contents of the current version will be lost. If you
-don't want to overwrite the file then answer 'n' (no) and you will be prompted
-for a new file name.
-'''
-
-    def overwriteQuestion(script):
-        return askQuestion (
-            question = 'File %s already exists, do you want to overwrite it? [%s]' % (script.fileName, defaultFileOverwrite),
-            default = defaultFileOverwrite, 
-            parser = parseYesNo,
-            help = overwriteHelp,
-            state = script)
-
-    def overwriteSelector(response):
-        if response:
-            return foobar
-        else:
-            return scriptName() 
-
-    return Action(action=overwriteQuestion, selector=overwriteSelector)
-
-def jobName():
-
-    jobNameHelp = '''
-This entry is optional. If you press enter it will not be used.
-You can attach a name to a job to remind you of its purpose.
-The name will be visible in the job queue, which will help
-you to distinguish it from any other jobs that you might be
-running or have run previously.
-'''
-    def jobNameQuestion(s):
-        return askQuestion (
-            question = 'What is the name of your job? []',
-            default = defaultJobName,
-            parser = parseNonEmptyString,
-            help = jobNameHelp,
-            state = s)
-
-    def setJobName(name, script):
-        script.JobName = name
-
-    return Action(
-        selector = lambda _ : foobar, 
-        action = jobNameQuestion,
-        modifyState = setJobName)
-
-def openFile(): 
-    def setScriptFile(file, script):
-       script.file = file
-
-    def openFileSelector (fileOpenResult):
+    def select(fileOpenResult):
         if fileOpenResult.file:
             return jobName()
-        elif fileOpenResult.exists:
-            return askToOverwriteFile() 
-        elif fileOpenResult.error: 
+        elif fileOpenResult.error:
             print (fileOpen.error)
             return scriptName()
 
-    def openFile(script):
+    def act(script):
         name = script.fileName
-        if os.path.exists(name):
-            return FileOpen(name, exists=True) 
         try:
             f = open(name, "w")
             return FileOpen(name, file=f)
@@ -219,14 +154,92 @@ def openFile():
             return FileOpen(name, error=str(e))
 
     return Action(
-        selector = openFileSelector, 
-        action = openFile,
-        modifyState = setScriptFile)
+        action=act,
+        selector=select,
+        modifyState=modify)
+
+def askToOverwriteFile():
+
+    helpMsg = '''
+The file name you have requested refers to a file that already exists.
+If you answer 'y' (yes) to this question then that file will be overwritten
+with new data, and the contents of the current version will be lost. If you
+don't want to overwrite the file then answer 'n' (no) and you will be prompted
+for a new file name.
+'''
+    def act(script):
+        return askQuestion (
+            question = 'File %s already exists, do you want to overwrite it? [%s]' % (script.fileName, defaultFileOverwrite),
+            default = defaultFileOverwrite,
+            parser = parseYesNo,
+            help = helpMsg,
+            state = script)
+
+    def select(response):
+        if response:
+            return overwriteFile()
+        else:
+            return scriptName()
+
+    return Action(action=act, selector=select)
+
+def jobName():
+
+    helpMsg = '''
+This entry is optional. If you press enter it will not be used.
+You can attach a name to a job to remind you of its purpose.
+The name will be visible in the job queue, which will help
+you to distinguish it from any other jobs that you might be
+running or have run previously.
+'''
+    def act(s):
+        return askQuestion (
+            question = 'What is the name of your job? []',
+            default = defaultJobName,
+            parser = parseNonEmptyString,
+            help = helpMsg,
+            state = s)
+
+    def modify(name, script):
+        script.JobName = name
+
+    return Action(
+        selector = lambda _ : foobar,
+        action = act,
+        modifyState = modify)
+
+def openFile():
+    def modify(file, script):
+       script.file = file
+
+    def select(fileOpenResult):
+        if fileOpenResult.file:
+            return jobName()
+        elif fileOpenResult.exists:
+            return askToOverwriteFile()
+        elif fileOpenResult.error:
+            print (fileOpenResult.error)
+            return scriptName()
+
+    def act(script):
+        name = script.fileName
+        if os.path.exists(name):
+            return FileOpen(name, exists=True)
+        try:
+            f = open(name, "w")
+            return FileOpen(name, file=f)
+        except IOError, e:
+            return FileOpen(name, error=str(e))
+
+    return Action(
+        selector = select,
+        action = act,
+        modifyState = modify)
 
 
-def scriptName(): 
+def scriptName():
 
-    scriptNameHelp = '''
+    helpMsg = '''
 Enter the name of the file for your new PBS script.
 Some tips for choosing a good name:
    - Make it meaningful, so it is easy to find in the future.
@@ -235,21 +248,21 @@ Some tips for choosing a good name:
      unless you want to overwrite its contents.
 '''
 
-    def setScriptName(name, script):
-        script.fileName = name 
+    def modify(name, script):
+        script.fileName = name
 
-    def scriptNameQuestion(s):
+    def act(s):
         return askQuestion (
             question = 'What is the file name of the new script? [%s]' % defaultScriptName,
             default = defaultScriptName,
             parser = parseNonEmptyString,
-            help = scriptNameHelp,
+            help = helpMsg,
             state = s)
 
     return Action (
         selector = lambda _ : openFile(),
-        action = scriptNameQuestion,
-        modifyState = setScriptName) 
+        action = act,
+        modifyState = modify)
 
 def terminate():
     raise Terminate()
