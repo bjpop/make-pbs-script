@@ -1,0 +1,5 @@
+- split system defaults from defaults.py
+
+- tasks per node
+
+- email notification
