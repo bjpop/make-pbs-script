@@ -14,12 +14,15 @@
 # Revision history:
 #
 # Fri 6 Aug 2010, Version 0.1. Untested. Incomplete.
+# Tue 25 Jan 2011, Version 0.2. Made messages and defaults sep modules.
+#     moved file name question until the end.
 #
 ################################################################################
 
 import re
 import os.path
 from defaults import *
+from local import *
 from messages import *
 
 def addLine (script, line):
@@ -82,7 +85,7 @@ class Decision(object):
         self.action = action
         self.modifyState = modifyState
 
-def askQuestion(question, help, default, parser, state):
+def askQuestion(question, help, default, parser):
     '''
     Ask the user a question, allowing the user to ask for help
     or quit the application. Default answers can be provided.
@@ -100,7 +103,7 @@ def askQuestion(question, help, default, parser, state):
                 continue
             else:
                 response = default
-        elif response.lower() in ['h', 'help']:
+        elif response.lower() in ['?', 'h', 'help']:
             print "\n%s\n" % help
             continue
         elif response.lower() in ['q', 'quit']:
@@ -185,8 +188,8 @@ def overwriteFile():
             print (fileOpen.error)
             return scriptName()
 
-    def act(script):
-        name = script.fileName
+    def act(state):
+        name = state.fileName
         try:
             f = open(name, "w")
             return FileOpen(name, openFile=f)
@@ -198,13 +201,12 @@ def overwriteFile():
 def askToOverwriteFile():
     'Ask the user if they want to overwrite a file that already exists.'
 
-    def act(script):
+    def act(state):
         return askQuestion (
-            question = 'File %s already exists, do you want to overwrite it?' % script.fileName,
+            question = 'File %s already exists, do you want to overwrite it?' % state.fileName,
             default = defaultFileOverwrite,
             parser = parseYesNo,
-            help = overwriteFileMessage,
-            state = script)
+            help = overwriteFileMessage)
 
     def select(response):
         if response:
@@ -217,13 +219,12 @@ def askToOverwriteFile():
 def runInSameDir():
     'Ask the user if they want to run the job in the same directory as it was launched.'
 
-    def act(s):
+    def act(state):
         return askQuestion (
             question = runInSameDirQuestion,
             default = defaultSameDir,
             parser = parseYesNo,
-            help = sameDirMessage,
-            state = s)
+            help = sameDirMessage)
 
     def modify(response, script):
         if response:
@@ -235,13 +236,12 @@ def runInSameDir():
 def smpRAM():
     'Ask for the maximum memory needed for an SMP job.'
 
-    def act(s):
+    def act(state):
         return askQuestion (
             question = smpRAMQuestion,
             default = str(defaultSMPMem),
             parser = lambda input: parseIntegerInRange(input,1,maxSMPMem),
-            help = smpMemMessage,
-            state = s)
+            help = smpMemMessage)
 
     def modify(response, script):
         addLine(script, '# ' + smpRAMQuestion)
@@ -252,13 +252,12 @@ def smpRAM():
 def isSMP():
     'Is the job SMP? True means yes, False means it is treated as a distributed job.'
 
-    def act(s):
+    def act(state):
         return askQuestion (
             question = isSMPQuestion,
             default = defaultIsSMP,
             parser = parseYesNo,
-            help = smpMessage,
-            state = s)
+            help = smpMessage)
 
     def select(response):
         if response:
@@ -278,13 +277,12 @@ def isSMP():
 def distribCores():
     'Ask how many cores are needed by a distributed job.'
 
-    def act(s):
+    def act(state):
         return askQuestion (
             question = distribCoresQuestion,
             default = str(defaultCores),
             parser = lambda input: parseIntegerInRange(input, 1, maxCores),
-            help = coresMessage,
-            state = s)
+            help = coresMessage)
 
     def modify(response, script):
         addLine(script, '# ' + distribCoresQuestion)
@@ -295,13 +293,12 @@ def distribCores():
 def distribMem():
     'Ask how much memory is needed per task in a distributed job'
 
-    def act(s):
+    def act(state):
         return askQuestion (
             question = distribMemQuestion,
             default = str(defaultDistribMem),
             parser = lambda input: parseIntegerInRange(input, 1, maxDistribMem),
-            help = distribMemMessage,
-            state = s)
+            help = distribMemMessage)
 
     def modify(response, script):
         addLine(script, '# ' + distribMemQuestion)
@@ -312,13 +309,12 @@ def distribMem():
 def walltime():
     'Ask how much walltime is needed for the job.'
 
-    def act(s):
+    def act(state):
         return askQuestion (
             question = walltimeQuestion,
             default = defaultWallTime,
             parser = parseTime,
-            help = timeMessage,
-            state = s)
+            help = timeMessage)
 
     def modify(time, script):
         addLine(script, '# ' + walltimeQuestion)
@@ -329,13 +325,12 @@ def walltime():
 def jobName():
     'Ask for the name of the job.'
 
-    def act(s):
+    def act(state):
         return askQuestion (
             question = jobNameQuestion,
             default = defaultJobName,
             parser = parseAnyString,
-            help = jobNameMessage,
-            state = s)
+            help = jobNameMessage)
 
     def modify(name, script):
         if len(name) > 0:
@@ -361,8 +356,8 @@ def openFile():
             print (fileOpenResult.error)
             return scriptName()
 
-    def act(script):
-        name = script.fileName
+    def act(state):
+        name = state.fileName
         if os.path.exists(name):
             return FileOpen(name, exists=True)
         try:
@@ -377,46 +372,45 @@ def scriptName():
     'Ask for the name of the job script file (not the name of the job).'
 
     def modify(name, script):
-        script.fileName = name
+        # replace spaces with underscore to be on the safe side.
+        canonical = ''.join(replaceAll(lambda x: x.isspace(), name, '_'))
+        script.fileName = canonical
 
-    def act(s):
+    def act(state):
         return askQuestion (
             question = scriptNameQuestion,
             default = defaultScriptName,
             parser = parseNonEmptyString,
-            help = scriptNameMessage,
-            state = s)
+            help = scriptNameMessage)
 
     return Decision(const(openFile()), act, modify)
 
 def modules():
     'Ask for the modules to load.'
 
-    def act(s):
+    def act(state):
         return askQuestion (
             question = moduleQuestion,
             default = defaultModules,
             parser = parseAnyString,
-            help = moduleMessage,
-            state = s)
+            help = moduleMessage)
 
     def modify(moduleStr, script):
         if len(moduleStr) > 0:
-            addLine(script, '# ' + moduleStr)
-            addLine(script, moduleStr)
+            addLine(script, '# ' + moduleQuestion)
+            addLine(script, 'module load ' + moduleStr)
 
     return Decision(const(command()), act, modify)
 
 def command():
     'Ask for the command to run.'
 
-    def act(s):
+    def act(state):
         return askQuestion (
             question = commandQuestion,
             default = defaultCommand,
             parser = parseAnyString,
-            help = jobNameMessage,
-            state = s)
+            help = jobNameMessage)
 
     def modify(commandStr, script):
         if len(commandStr) > 0:
@@ -452,7 +446,7 @@ def main():
     banner()
     print welcomeMessage
     banner()
-    print
+    print '\nh = help, q = quit\n'
     script = Script()
     script.file = None
     script.lines = ['#!/bin/bash']

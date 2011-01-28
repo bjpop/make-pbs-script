@@ -1,4 +1,5 @@
 from defaults import *
+from local import *
 
 jobNameQuestion = 'What is the name of your job?'
 walltimeQuestion = 'What is the maximum wall time needed by your job? (hh:mm:ss)'
@@ -53,18 +54,17 @@ a clock on the wall. The time is counted from the moment when the
 job begins execution on the compute nodes (not when it is submitted to
 the job queue). The time ends when the job completes. If your job runs
 out of wall time then it will be automatically terminated. However, you
-can request an extension by sending an email to help@vlsci.unimelb.edu.au.
-'''
+can request an extension by sending an email to %s
+''' % helpEmail
 
 smpMessage = '''
 SMP means 'Symmetric multiprocessing'.
-See: http://en.wikipedia.org/wiki/Symmetric_multiprocessing.
 SMP jobs consist of one multithreaded process. The number of cores available
 to an SMP job is limited by the physical number of cores on a single compute
-node. On the x86 clusters at VLSCI the maximum cores per node is %d.
+node. On the x86 clusters at %s the maximum cores per node is %d.
 Each core shares access to the same pool of memory as every other core in the job.
 SMP jobs are not distributed over multiple compute nodes.
-''' % coresPerNode
+''' % (siteName, coresPerNode)
 
 smpMemMessage = '''
 Specify how much memory you need for the whole job.
@@ -84,11 +84,11 @@ memory per process, not the total memory for the whole job.
 
 coresMessage = '''
 A CPU core is one processor.
-On bruce.vlsci.unimelb.edu.au each compute node has 2 processor sockets.
+On %s each compute node has 2 processor sockets.
 Each processor socket has 4 CPU cores.
 Therefore each compute node has 8 CPU cores.
 All CPU cores on the same compute node share the RAM memory of the node.
-'''
+''' % machineName
 
 commandMessage = '''
 Enter the unix command that you want to execute on the compute nodes. For example,
@@ -112,35 +112,31 @@ by whitespace on a single line. For example:
    octave-icc gcc velvet-gcc
 
 Modules provide a convenient way to set up the unix environment for particular programs.
-Many programs on bruce.vlsci.unimelb.edu.au have a module file associated with them.
+Many programs on %s have a module file associated with them.
 The module file must be loaded before the program can be run. To find out what modules
 are available on bruce.vlsci.unimelb.edu.au, type the command 'module avail' at the
 unix prompt.
-'''
+''' % machineName
 
 welcomeMessage = '''
-Welcome to the PBS script generator.
-
-Please answer the questions which follow.
-
-Press enter after you have typed your answer to each question.
+Welcome to the PBS script generator. Please answer the questions which follow.
 
 Where possible:
    - Valid responses are shown inside parenthesis ().
    - Default responses are shown inside square brackets [].
 
-If a default answer is available, you can accept it by pressing enter
+If a default answer is available, you can accept it by pressing 'enter'
 immediately.
 
-If you don't understand a question then press h (and enter) for help.
+If you don't understand a question then enter 'h' for help.
 
-You can exit anytime by pressing q (and enter). You will be prompted for
-a file name to save a partially complete script.
+You can exit anytime by entering 'q'. You will be prompted for
+a file name to save your script.
 
-You can also exit immediately without saving your results to file
+You can also exit immediately without saving your results
 by pressing Control-C.
 
 Questions about using the script should be sent to:
 
-    help@vlsci.unimelb.edu.au
-'''
+    %s
+''' % helpEmail
