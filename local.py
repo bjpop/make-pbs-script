@@ -1,0 +1,9 @@
+machineName = 'bruce.vlsci.unimelb.edu.au'
+maxCores = 512
+helpEmail = 'help@vlsci.unimelb.edu.au'
+socketsPerNode = 2
+coresPerSocket = 4
+coresPerNode = coresPerSocket * socketsPerNode
+maxSMPMem = 144 # gigabytes
+maxDistribMem = 144 # XXX not sure if this is really sane
+siteName = 'VLSCI'
